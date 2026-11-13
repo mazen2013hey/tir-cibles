@@ -1,0 +1,16 @@
+{
+  "name": "tir-sur-cibles-3d",
+  "version": "1.0.0",
+  "description": "Jeu de tir sur cibles 3D multijoueur en ligne (duels 1 contre 1)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
