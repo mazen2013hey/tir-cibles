@@ -52,8 +52,7 @@
 
   /* ---------- Pastille du joueur ---------- */
   #me { position: absolute; top: 14px; left: 14px; display: flex; align-items: center; gap: 10px;
-    background: var(--panel); border: 1px solid var(--line); 
-border-radius: 8px; padding: 8px 10px 8px 14px; backdrop-filter: blur(6px); }
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 8px 14px; backdrop-filter: blur(6px); }
   #me .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
   #me-name { font-weight: 700; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -117,8 +116,7 @@ border-radius: 8px; padding: 8px 10px 8px 14px; backdrop-filter: blur(6px); }
   #lockhint { position: absolute; left: 50%; bottom: 8vh; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--signal);
     padding: 12px 20px; border-radius: 8px; font-weight: 600; pointer-events: none; text-align: center; }
   #lockhint small { display: block; color: var(--muted); font-weight: 400; margin-top: 3px; }
-  #opp-marker { position: absolute; top: 50%; transform: translateY(-50%); background: var(--panel); border: 1px solid 
-var(--line);
+  #opp-marker { position: absolute; top: 50%; transform: translateY(-50%); background: var(--panel); border: 1px solid var(--line);
     padding: 7px 12px; border-radius: 6px; font-weight: 600; pointer-events: none; }
   #opp-marker.left { left: 14px; }
   #opp-marker.right { right: 14px; }
@@ -575,8 +573,7 @@ $('invite-refuse').addEventListener('click', () => respondInvite(false));
 
 /* =====================================================================
    Bataille
-   ==================================
-=================================== */
+   ===================================================================== */
 socket.on('match-start', (d) => {
   hideInvitePopup();
   closeNick();
@@ -661,8 +658,7 @@ function overlayOpen() {
 function updateLockHint() {
   $('lockhint').classList.toggle('hidden', !(state === 'match' && !isLocked() && !overlayOpen()));
 }
-document.addEventListener('pointerlockchange', () 
-=> { if (!isLocked()) for (const k in keys) keys[k] = false; updateLockHint(); });
+document.addEventListener('pointerlockchange', () => { if (!isLocked()) for (const k in keys) keys[k] = false; updateLockHint(); });
 canvas.addEventListener('click', () => { if (state === 'match' && !isLocked() && !overlayOpen()) canvas.requestPointerLock?.(); });
 $('hud').addEventListener('click', (e) => { if (e.target.id === 'hud' && state === 'match' && !isLocked()) canvas.requestPointerLock?.(); });
 document.addEventListener('mousemove', (e) => {
@@ -817,4 +813,4 @@ setState('nick');
 openNick('first');
 </script>
 </body>
-  </html>
+</html>
