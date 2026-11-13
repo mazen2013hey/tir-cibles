@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stand de tir – Duel en ligne</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style>
+  :root {
+    --deep: #081b1f;
+    --ink: #0c2a2f;
+    --panel: rgba(8, 27, 31, .86);
+    --line: rgba(216, 236, 232, .16);
+    --mist: #d8ece8;
+    --muted: #7fa6a3;
+    --signal: #ffcf33;
+    --red: #e8412c;
+    --ok: #5fe0a1;
+    --bad: #ff7a66;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--deep); color: var(--mist);
+    font-family: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif; }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #ui { position: fixed; inset: 0; pointer-events: none; }
+  #ui button, #ui input, #ui .panel, #ui .card, #ui .overlay { pointer-events: auto; }
+  .hidden { display: none !important; }
+
+  /* ---------- Boutons & champs ---------- */
+  .btn { font: 600 15px 'Chakra Petch', sans-serif; border: 0; border-radius: 6px; padding: 11px 18px; cursor: pointer;
+    background: var(--signal); color: #231a00; transition: transform .08s, filter .15s; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn.ghost { background: transparent; color: var(--mist); border: 1px solid var(--line); }
+  .btn.ghost:hover { border-color: var(--mist); }
+  .btn.danger { background: var(--red); color: #fff; }
+  .btn.small { padding: 6px 11px; font-size: 13px; }
+  input[type=text] { width: 100%; font: 500 16px 'Chakra Petch', sans-serif; color: var(--mist); background: rgba(255,255,255,.06);
+    border: 1px solid var(--line); border-radius: 6px; padding: 11px 13px; outline: none; }
+  input[type=text]:focus { border-color: var(--signal); }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 0 0 6px; }
+  .msg { min-height: 1.4em; margin: 10px 0 0; font-size: 14px; line-height: 1.4; }
+  .msg.error { color: var(--bad); }
+  .msg.ok { color: var(--ok); }
+
+  /* ---------- Pastille du joueur ---------- */
+  #me { position: absolute; top: 14px; left: 14px; display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); 
+border-radius: 8px; padding: 8px 10px 8px 14px; backdrop-filter: blur(6px); }
+  #me .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  #me-name { font-weight: 700; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---------- Titre du menu ---------- */
+  #logo { position: absolute; left: 50%; top: 9vh; transform: translateX(-50%); text-align: center; pointer-events: none; }
+  #logo h1 { margin: 0; font: 400 clamp(34px, 6vw, 72px)/0.95 'Bungee', 'Impact', sans-serif; letter-spacing: .01em;
+    color: var(--signal); text-shadow: 0 4px 0 var(--red), 0 10px 30px rgba(0,0,0,.5); }
+  #logo p { margin: 16px 0 0; color: var(--mist); font-size: 17px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+
+  /* ---------- Panneau multijoueur ---------- */
+  #side { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); width: min(340px, calc(100vw - 36px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(8px); overflow: hidden; }
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tab { flex: 1; font: 600 14px 'Chakra Petch', sans-serif; padding: 13px 10px; background: transparent; color: var(--muted);
+    border: 0; border-bottom: 3px solid transparent; cursor: pointer; }
+  .tab.active { color: var(--signal); border-bottom-color: var(--signal); }
+  .tabpane { padding: 18px; }
+  .tabpane p, .tabpane li { font-size: 14.5px; line-height: 1.5; color: var(--mist); }
+  .tabpane ul { padding-left: 18px; margin: 0; }
+  .tabpane .btn { width: 100%; margin-top: 12px; }
+
+  /* ---------- Overlays / cartes ---------- */
+  .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(4, 14, 16, .72); backdrop-filter: blur(5px); padding: 18px; }
+  .card { width: min(400px, 100%); background: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 26px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  .card h2 { margin: 0 0 6px; font: 400 26px 'Bungee', sans-serif; color: var(--signal); }
+  .card p.lead { margin: 0 0 18px; color: var(--muted); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; gap: 10px; margin-top: 14px; }
+  .row .btn { flex: 1; margin: 0; }
+  #nick-screen { z-index: 30; }
+  #invite-popup { z-index: 20; }
+  #invite-popup .card { text-align: center; border-color: var(--signal); animation: pop .22s ease-out; }
+  #invite-text { font-size: 21px; font-weight: 700; line-height: 1.3; margin: 0 0 4px; }
+  @keyframes pop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* ---------- HUD de bataille ---------- */
+  #scorebar { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: stretch; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: min(560px, calc(100vw - 32px)); }
+  .side { padding: 8px 16px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .side.opp { text-align: right; }
+  .side .n { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side .s { font: 400 34px/1 'Bungee', sans-serif; color: var(--mist); }
+  .side.you .s { color: var(--signal); }
+  #timer { display: grid; place-items: center; padding: 0 20px; font: 400 30px 'Bungee', sans-serif; background: rgba(255,255,255,.05);
+    border-left: 1px solid var(--line); border-right: 1px solid var(--line); min-width: 84px; }
+  #timer.low { color: var(--red); }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%); pointer-events: none; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: var(--mist); box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+    -webkit-mask: linear-gradient(#000 0 8px, transparent 8px calc(100% - 8px), #000 calc(100% - 8px)); mask: linear-gradient(#000 0 8px, transparent 8px calc(100% - 8px), #000 calc(100% - 8px)); }
+  #crosshair::after { top: 50%; left: 0; right: 0; height: 2px; margin-top: -1px;
+    -webkit-mask: linear-gradient(90deg, #000 0 8px, transparent 8px calc(100% - 8px), #000 calc(100% - 8px)); mask: linear-gradient(90deg, #000 0 8px, transparent 8px calc(100% - 8px), #000 calc(100% - 8px)); }
+  #crosshair.hit::before, #crosshair.hit::after { background: var(--signal); }
+  #countdown { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); font: 400 clamp(70px, 14vw, 160px)/1 'Bungee', sans-serif;
+    color: var(--signal); text-shadow: 0 6px 0 var(--red), 0 12px 40px rgba(0,0,0,.6); pointer-events: none; }
+  #flash { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); font: 400 36px 'Bungee', sans-serif; pointer-events: none; opacity: 0; }
+  #flash.go { animation: floatup .9s ease-out forwards; }
+  #flash.you { color: var(--signal); text-shadow: 0 3px 0 var(--red); }
+  #flash.opp { color: var(--mist); font-size: 24px; text-shadow: 0 2px 6px #000; }
+  @keyframes floatup { 0% { opacity: 0; transform: translate(-50%, 14px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50px); } }
+  #lockhint { position: absolute; left: 50%; bottom: 8vh; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--signal);
+    padding: 12px 20px; border-radius: 8px; font-weight: 600; pointer-events: none; text-align: center; }
+  #lockhint small { display: block; color: var(--muted); font-weight: 400; margin-top: 3px; }
+  #opp-marker { position: absolute; top: 50%; transform: translateY(-50%); background: var(--panel); border: 1px solid 
+var(--line);
+    padding: 7px 12px; border-radius: 6px; font-weight: 600; pointer-events: none; }
+  #opp-marker.left { left: 14px; }
+  #opp-marker.right { right: 14px; }
+  #leave { position: absolute; right: 14px; top: 14px; }
+
+  /* ---------- Fin de partie ---------- */
+  #end { z-index: 15; }
+  #end .card { text-align: center; }
+  #end-title { font: 400 44px 'Bungee', sans-serif; margin: 0 0 4px; }
+  #end-title.win { color: var(--signal); text-shadow: 0 3px 0 var(--red); }
+  #end-title.lose { color: var(--bad); }
+  #end-title.draw { color: var(--mist); }
+  #end-reason { color: var(--muted); margin: 0 0 18px; min-height: 1.3em; }
+  #end-scores { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  #end-scores div { background: rgba(255,255,255,.05); border-radius: 8px; padding: 12px 8px; }
+  #end-scores .n { font-size: 13px; color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #end-scores .s { font: 400 34px 'Bungee', sans-serif; }
+
+  /* ---------- Notifications ---------- */
+  #toasts { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 40; pointer-events: none; }
+  .toast { background: var(--ink); border: 1px solid var(--line); border-left: 4px solid var(--signal); padding: 10px 16px; border-radius: 6px; font-size: 14.5px; max-width: 90vw; animation: pop .2s ease-out; }
+  .toast.error { border-left-color: var(--red); }
+
+  @media (max-width: 760px) {
+    #side { top: auto; bottom: 14px; transform: none; right: 50%; margin-right: calc(min(340px, 100vw - 36px) / -2); }
+    #logo { top: 70px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <!-- Pastille pseudo -->
+  <div id="me" class="hidden">
+    <span class="dot"></span>
+    <span id="me-name"></span>
+    <button id="change-nick" class="btn ghost small" type="button">Changer de pseudo</button>
+  </div>
+
+  <!-- Titre -->
+  <div id="logo" class="hidden">
+    <h1>Stand de tir</h1>
+    <p>Duel de précision en ligne, 60 secondes pour toucher plus de cibles que votre ami.</p>
+  </div>
+
+  <!-- Panneau Multijoueur / Duel -->
+  <aside id="side" class="hidden">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="duel" role="tab" type="button">Multijoueur / Duel</button>
+      <button class="tab" data-tab="rules" role="tab" type="button">Règles</button>
+    </div>
+    <section id="tab-duel" class="tabpane">
+      <form id="invite-form" autocomplete="off">
+        <label for="invite-input">Pseudo exact de votre ami</label>
+        <input id="invite-input" type="text" maxlength="16" placeholder="Ex. : Camille_92" spellcheck="false">
+        <button id="invite-btn" class="btn" type="submit">Inviter à une bataille</button>
+      </form>
+      <p id="invite-msg" class="msg" role="status"></p>
+    </section>
+    <section id="tab-rules" class="tabpane hidden">
+      <ul>
+        <li>Une cible apparaît à la fois, la même pour les deux joueurs.</li>
+        <li>Le premier qui la touche gagne 10 points, puis la suivante apparaît.</li>
+        <li>La bataille dure 60 secondes.</li>
+        <li>Souris : viser · clic : tirer · Z Q S D (ou W A S D) : se déplacer · Échap : libérer la souris.</li>
+      </ul>
+    </section>
+  </aside>
+
+  <!-- HUD en bataille -->
+  <div id="hud" class="hidden">
+    <div id="scorebar">
+      <div class="side you"><span class="n" id="n-you"></span><span class="s" id="s-you">0</span></div>
+      <div id="timer">60</div>
+      <div class="side opp"><span class="n" id="n-opp"></span><span class="s" id="s-opp">0</span></div>
+    </div>
+    <button id="leave" class="btn ghost small" type="button">Abandonner</button>
+    <div id="crosshair"></div>
+    <div id="countdown"></div>
+    <div id="flash"></div>
+    <div id="opp-marker" class="hidden"></div>
+    <div id="lockhint" class="hidden">Cliquez pour viser et tirer<small>Échap libère la souris</small></div>
+  </div>
+
+  <!-- Fin de bataille -->
+  <div id="end" class="overlay hidden">
+    <div class="card">
+      <h2 id="end-title" style="font-size:44px"></h2>
+      <p id="end-reason"></p>
+      <div id="end-scores">
+        <div><span class="n" id="end-n-you"></span><span class="s" id="end-s-you"></span></div>
+        <div><span class="n" id="end-n-opp"></span><span class="s" id="end-s-opp"></span></div>
+      </div>
+      <button id="back-menu" class="btn" type="button" style="width:100%">Retour au menu principal</button>
+    </div>
+  </div>
+
+  <!-- Pop-up d'invitation -->
+  <div id="invite-popup" class="overlay hidden" role="alertdialog" aria-labelledby="invite-text">
+    <div class="card">
+      <p id="invite-text"></p>
+      <p class="lead" style="margin:0">L’invitation expire dans 20 secondes.</p>
+      <div class="row">
+        <button id="invite-accept" class="btn" type="button">Accepter</button>
+        <button id="invite-refuse" class="btn ghost" type="button">Refuser</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Choix / changement de pseudo -->
+  <div id="nick-screen" class="overlay">
+    <form id="nick-form" class="card" autocomplete="off">
+      <h2 id="nick-title">Votre pseudo</h2>
+      <p class="lead" id="nick-lead">Choisissez un pseudo unique pour entrer dans le stand de tir.</p>
+      <label for="nick-input">Pseudo (2 à 16 caractères)</label>
+      <input id="nick-input" type="text" maxlength="16" spellcheck="false" autofocus>
+      <p id="nick-error" class="msg error" role="alert"></p>
+      <div class="row">
+        <button id="nick-btn" class="btn" type="submit">Entrer</button>
+        <button id="nick-cancel" class="btn ghost hidden" type="button">Annuler</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="toasts"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script type="module">
+import * as THREE from 'three';
+
+/* =====================================================================
+   Utilitaires & état
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+const rand = (a, b) => a + Math.random() * (b - a);
+const socket = io();
+
+let myNick = null;
+let state = 'nick';            // nick | menu | match | end
+let nickMode = 'first';        // first | change
+let currentInviteId = null;
+let outgoingInvite = false;
+let oppNick = '';
+let match = null;              // { startAt, endAt, revealed, pendingTarget, scores }
+const me = { x: 0, z: 7, yaw: 0, pitch: 0 };
+const keys = {};
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+/* =====================================================================
+   Scène 3D
+   ===================================================================== */
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a2328);
+scene.fog = new THREE.Fog(0x0a2328, 28, 75);
+const camera = new THREE.PerspectiveCamera(78, 1, 0.1, 120);
+camera.rotation.order = 'YXZ';
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+scene.add(new THREE.HemisphereLight(0xcfeee8, 0x16343a, 1.7));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(5, 12, 10);
+scene.add(sun);
+
+function addBox(w, h, d, color, x, y, z, emissive = 0, ei = 0) {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.85, emissive, emissiveIntensity: ei })
+  );
+  m.position.set(x, y, z);
+  scene.add(m);
+  return m;
+}
+
+// Salle du stand
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 80), new THREE.MeshStandardMaterial({ color: 0x173a40, roughness: 0.95 }));
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(0, 0, -25);
+scene.add(floor);
+addBox(30, 12, 0.5, 0x10353b, 0, 6, -32);          // mur du fond
+addBox(0.5, 12, 80, 0x0f2e34, -15, 6, -25);        // murs latéraux
+addBox(0.5, 12, 80, 0x0f2e34, 15, 6, -25);
+for (let i = -2; i <= 2; i++) addBox(0.12, 0.02, 70, 0xffcf33, i * 5, 0.012, -22, 0xffcf33, 0.35); // couloirs
+for (let z = -5; z >= -30; z -= 5) addBox(30, 0.02, 0.1, 0x7fa6a3, 0, 0.013, z, 0x7fa6a3, 0.2);    // repères de distance
+addBox(30, 1.0, 1.0, 0x1f4a52, 0, 0.5, 4);         // comptoir de tir
+addBox(30, 0.06, 1.1, 0xe8412c, 0, 1.03, 4, 0xe8412c, 0.6);
+for (let z = 6; z >= -28; z -= 11) addBox(0.5, 0.15, 6, 0xfff1c2, 0, 11.6, z, 0xfff1c2, 1.2); // néons de plafond
+addBox(26, 0.3, 0.1, 0xffcf33, 0, 9, -31.6, 0xffcf33, 0.8);
+addBox(26, 0.3, 0.1, 0xe8412c, 0, 8.4, -31.6, 0xe8412c, 0.8);
+
+// ---- Cibles ----
+function createTarget() {
+  const g = new THREE.Group();
+  const rings = [[0.7, 0xeef3f1], [0.56, 0xe8412c], [0.4, 0xeef3f1], [0.26, 0xe8412c], [0.1, 0xffcf33]];
+  rings.forEach(([r, c], i) => {
+    const m = new THREE.Mesh(
+      new THREE.CylinderGeometry(r, r, 0.06, 40),
+      new THREE.MeshStandardMaterial({ color: c, roughness: 0.5, emissive: c, emissiveIntensity: 0.18 })
+    );
+    m.rotation.x = Math.PI / 2;
+    m.position.z = i * 0.012;
+    g.add(m);
+  });
+  return g;
+}
+function placeTarget(g, x, y, z) {
+  g.position.set(x, y, z);
+  g.lookAt(0, 1.7, 7);
+}
+
+let targetObj = null;
+function spawnTarget(t) {
+  clearTarget();
+  targetObj = createTarget();
+  placeTarget(targetObj, t.x, t.y, t.z);
+  targetObj.userData = { id: t.id, spawnAt: performance.now() };
+  targetObj.scale.setScalar(0.01);
+  scene.add(targetObj);
+}
+function clearTarget() {
+  if (targetObj) { scene.remove(targetObj); disposeTree(targetObj); targetObj = null; }
+}
+function disposeTree(o) {
+  o.traverse((c) => { c.geometry?.dispose(); c.material?.map?.dispose(); c.material?.dispose(); });
+}
+
+// Cibles décoratives du menu
+const decor = new THREE.Group();
+[[-6, 2.6, -16], [-2.5, 4, -22], [2, 1.9, -14], [5.5, 3.6, -20], [8.5, 2.2, -26], [-9, 4.2, -27]].forEach(([x, y, z], i) => {
+  const t = createTarget(); placeTarget(t, x, y, z); t.userData.base = y; t.userData.ph = i; decor.add(t);
+});
+scene.add(decor);
+
+// ---- Adversaire ----
+function makeNameSprite(text) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgba(8,27,31,.82)';
+  x.beginPath(); x.roundRect(8, 16, 496, 96, 20); x.fill();
+  x.strokeStyle = '#ffcf33'; x.lineWidth = 4; x.stroke();
+  x.fillStyle = '#ffffff';
+  x.font = '700 58px "Chakra Petch", Arial, sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(text, 256, 66, 470);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  sp.scale.set(2.4, 0.6, 1);
+  sp.renderOrder = 10;
+  return sp;
+}
+
+const avatar = new THREE.Group();
+const upper = new THREE.Group();
+let nameSprite = null;
+{
+  const suit = new THREE.MeshStandardMaterial({ color: 0xffcf33, roughness: 0.55, emissive: 0xffcf33, emissiveIntensity: 0.2 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x1a2428, roughness: 0.6 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xf0cfae, roughness: 0.7 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.7, 6, 16), suit); body.position.y = 1.0;
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.55, 12), dark); legL.position.set(-0.14, 0.27, 0);
+  const legR = legL.clone(); legR.position.x = 0.14;
+  upper.position.y = 1.3;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), skin); head.position.y = 0.45;
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.09, 0.1), dark); visor.position.set(0, 0.48, -0.17);
+  const gun = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 0.6), dark); gun.position.set(0.28, 0.05, -0.42);
+  upper.add(head, visor, gun);
+  avatar.add(body, legL, legR, upper);
+  avatar.visible = false;
+  scene.add(avatar);
+}
+function setOpponentName(nick) {
+  oppNick = nick;
+  if (nameSprite) { avatar.remove(nameSprite); nameSprite.material.map.dispose(); nameSprite.material.dispose(); }
+  nameSprite = makeNameSprite(nick);
+  nameSprite.position.y = 2.35;
+  avatar.add(nameSprite);
+  $('n-opp').textContent = nick;
+}
+const oppTarget = { x: 0, z: 7, yaw: 0, pitch: 0 };
+
+// ---- Effets (traînées de tir, éclats) ----
+const effects = [];
+function tracer(from, to, color) {
+  const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 1 });
+  const line = new THREE.Line(geo, mat);
+  scene.add(line);
+  effects.push({ obj: line, life: 0.12, max: 0.12, kind: 'tracer' });
+}
+function burst(pos, color = 0xffcf33) {
+  for (let i = 0; i < 18; i++) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color, transparent: true }));
+    m.position.copy(pos);
+    scene.add(m);
+    effects.push({ obj: m, life: 0.6, max: 0.6, kind: 'spark',
+      vel: new THREE.Vector3(rand(-3, 3), rand(-1, 4), rand(-3, 3)) });
+  }
+}
+function updateEffects(dt) {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i];
+    e.life -= dt;
+    if (e.kind === 'spark') {
+      e.vel.y -= 9 * dt;
+      e.obj.position.addScaledVector(e.vel, dt);
+    }
+    e.obj.material.opacity = Math.max(0, e.life / e.max);
+    if (e.life <= 0) {
+      scene.remove(e.obj);
+      e.obj.geometry.dispose(); e.obj.material.dispose();
+      effects.splice(i, 1);
+    }
+  }
+}
+
+/* =====================================================================
+   États d'interface
+   ===================================================================== */
+function setState(s) {
+  state = s;
+  $('me').classList.toggle('hidden', s === 'nick');
+  $('logo').classList.toggle('hidden', s !== 'menu');
+  $('side').classList.toggle('hidden', s !== 'menu');
+  $('hud').classList.toggle('hidden', s !== 'match');
+  $('end').classList.toggle('hidden', s !== 'end');
+  decor.visible = s !== 'match';
+  avatar.visible = s === 'match';
+  if (s !== 'match') { clearTarget(); document.exitPointerLock?.(); }
+  updateLockHint();
+}
+
+/* ---------- Pseudo ---------- */
+function openNick(mode, error = '') {
+  nickMode = mode;
+  $('nick-screen').classList.remove('hidden');
+  $('nick-cancel').classList.toggle('hidden', mode !== 'change');
+  $('nick-title').textContent = mode === 'change' ? 'Changer de pseudo' : 'Votre pseudo';
+  $('nick-lead').textContent = mode === 'change'
+    ? 'Le nouveau pseudo doit être libre. Votre pseudo actuel sera libéré.'
+    : 'Choisissez un pseudo unique pour entrer dans le stand de tir.';
+  $('nick-btn').textContent = mode === 'change' ? 'Valider' : 'Entrer';
+  $('nick-input').value = mode === 'change' ? myNick : '';
+  $('nick-error').textContent = error;
+  document.exitPointerLock?.();
+  setTimeout(() => { $('nick-input').focus(); $('nick-input').select(); }, 0);
+  updateLockHint();
+}
+function closeNick() {
+  $('nick-screen').classList.add('hidden');
+  updateLockHint();
+}
+$('nick-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  $('nick-btn').disabled = true;
+  socket.emit('set-nick', $('nick-input').value, (res) => {
+    $('nick-btn').disabled = false;
+    if (!res?.ok) { $('nick-error').textContent = res?.error || 'Erreur inconnue.'; return; }
+    const changed = myNick !== null && myNick !== res.nick;
+    myNick = res.nick;
+    $('me-name').textContent = myNick;
+    $('n-you').textContent = myNick;
+    closeNick();
+    if (state === 'nick') setState('menu');
+    if (changed) toast(`Pseudo changé : ${myNick}`);
+  });
+});
+$('change-nick').addEventListener('click', () => openNick('change'));
+$('nick-cancel').addEventListener('click', closeNick);
+
+/* ---------- Onglets ---------- */
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('active', x === t));
+  $('tab-duel').classList.toggle('hidden', t.dataset.tab !== 'duel');
+  $('tab-rules').classList.toggle('hidden', t.dataset.tab !== 'rules');
+}));
+
+/* ---------- Invitations ---------- */
+function setInviteMsg(text, type = '') {
+  const el = $('invite-msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+}
+$('invite-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('invite-input').value.trim();
+  if (!name) return setInviteMsg('Entrez le pseudo exact de votre ami.', 'error');
+  $('invite-btn').disabled = true;
+  socket.emit('invite', name, (res) => {
+    if (!res?.ok) {
+      $('invite-btn').disabled = false;
+      return setInviteMsg(res?.error || 'Erreur inconnue.', 'error');
+    }
+    outgoingInvite = true;
+    setInviteMsg(`Invitation envoyée à ${res.to}. En attente de sa réponse…`, 'ok');
+  });
+});
+socket.on('invite-result', ({ status, nick }) => {
+  outgoingInvite = false;
+  $('invite-btn').disabled = false;
+  const texts = {
+    declined: `${nick} a refusé votre invitation.`,
+    expired: `${nick} n’a pas répondu à temps.`,
+    offline: `${nick || 'Votre ami'} s’est déconnecté.`,
+    cancelled: 'L’invitation a été annulée.',
+  };
+  const text = texts[status] || 'Invitation terminée.';
+  setInviteMsg(text, 'error');
+  toast(text, status === 'declined' ? 'error' : '');
+});
+socket.on('invite-received', ({ inviteId, from }) => {
+  currentInviteId = inviteId;
+  $('invite-text').textContent = `${from} vous invite à une bataille !`;
+  $('invite-popup').classList.remove('hidden');
+  document.exitPointerLock?.();
+});
+socket.on('invite-cancelled', ({ inviteId }) => {
+  if (inviteId !== currentInviteId) return;
+  hideInvitePopup();
+  toast('L’invitation n’est plus valable.');
+});
+function hideInvitePopup() {
+  currentInviteId = null;
+  $('invite-popup').classList.add('hidden');
+}
+function respondInvite(accept) {
+  if (!currentInviteId) return;
+  socket.emit('invite-response', { inviteId: currentInviteId, accept });
+  hideInvitePopup();
+}
+$('invite-accept').addEventListener('click', () => respondInvite(true));
+$('invite-refuse').addEventListener('click', () => respondInvite(false));
+
+/* =====================================================================
+   Bataille
+   ==================================
+=================================== */
+socket.on('match-start', (d) => {
+  hideInvitePopup();
+  closeNick();
+  outgoingInvite = false;
+  $('invite-btn').disabled = false;
+  setInviteMsg('');
+  const now = performance.now();
+  match = {
+    startAt: now + d.countdownMs,
+    endAt: now + d.countdownMs + d.durationMs,
+    revealed: false,
+    pendingTarget: d.target,
+    scores: { you: 0, opp: 0 },
+    lastSend: 0,
+  };
+  Object.assign(me, { x: d.you.x, z: d.you.z, yaw: 0, pitch: 0 });
+  Object.assign(oppTarget, { x: d.opponent.x, z: d.opponent.z, yaw: 0, pitch: 0 });
+  avatar.position.set(d.opponent.x, 0, d.opponent.z);
+  avatar.rotation.y = 0;
+  setOpponentName(d.opponent.nick);
+  $('n-you').textContent = myNick;
+  renderScores();
+  setState('match');
+});
+
+socket.on('target-hit', (d) => {
+  if (!match) return;
+  if (targetObj) burst(targetObj.position, d.byYou ? 0xffcf33 : 0xd8ece8);
+  match.scores.you = d.you;
+  match.scores.opp = d.opponent;
+  renderScores();
+  spawnTarget(d.target);
+  flash(d.byYou ? '+10' : `${oppNick} +10`, d.byYou ? 'you' : 'opp');
+  if (d.byYou) { $('crosshair').classList.add('hit'); setTimeout(() => $('crosshair').classList.remove('hit'), 140); }
+});
+
+socket.on('opponent-move', (d) => Object.assign(oppTarget, d));
+socket.on('opponent-fire', ({ dir }) => {
+  const from = avatar.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+  const v = new THREE.Vector3(...dir).normalize();
+  tracer(from, from.clone().addScaledVector(v, 60), 0x8fe9ff);
+});
+socket.on('opponent-renamed', ({ nick }) => { setOpponentName(nick); toast(`Votre adversaire s’appelle maintenant ${nick}.`); });
+
+socket.on('match-end', (d) => {
+  match = null;
+  const titles = { win: 'Victoire !', lose: 'Défaite', draw: 'Égalité' };
+  const reasons = {
+    time: 'Temps écoulé.',
+    'opponent-left': 'Votre adversaire a quitté la partie.',
+    left: 'Vous avez abandonné la bataille.',
+  };
+  $('end-title').textContent = titles[d.result];
+  $('end-title').className = d.result;
+  $('end-reason').textContent = reasons[d.reason] || '';
+  $('end-n-you').textContent = myNick;
+  $('end-s-you').textContent = d.you;
+  $('end-n-opp').textContent = d.opponentNick;
+  $('end-s-opp').textContent = d.opponent;
+  setState('end');
+});
+$('back-menu').addEventListener('click', () => setState('menu'));
+$('leave').addEventListener('click', () => socket.emit('leave-match'));
+
+function renderScores() {
+  $('s-you').textContent = match.scores.you;
+  $('s-opp').textContent = match.scores.opp;
+}
+function flash(text, cls) {
+  const el = $('flash');
+  el.className = '';
+  void el.offsetWidth; // relance l'animation
+  el.textContent = text;
+  el.className = `go ${cls}`;
+}
+
+/* ---------- Entrées clavier / souris ---------- */
+const isLocked = () => document.pointerLockElement === canvas;
+function overlayOpen() {
+  return !$('nick-screen').classList.contains('hidden') || !$('invite-popup').classList.contains('hidden') || state === 'end';
+}
+function updateLockHint() {
+  $('lockhint').classList.toggle('hidden', !(state === 'match' && !isLocked() && !overlayOpen()));
+}
+document.addEventListener('pointerlockchange', () 
+=> { if (!isLocked()) for (const k in keys) keys[k] = false; updateLockHint(); });
+canvas.addEventListener('click', () => { if (state === 'match' && !isLocked() && !overlayOpen()) canvas.requestPointerLock?.(); });
+$('hud').addEventListener('click', (e) => { if (e.target.id === 'hud' && state === 'match' && !isLocked()) canvas.requestPointerLock?.(); });
+document.addEventListener('mousemove', (e) => {
+  if (state !== 'match' || !isLocked()) return;
+  me.yaw -= e.movementX * 0.0022;
+  me.pitch = clamp(me.pitch - e.movementY * 0.0022, -1.4, 1.4);
+});
+document.addEventListener('mousedown', (e) => { if (e.button === 0 && state === 'match' && isLocked()) shoot(); });
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && nickMode === 'change' && !$('nick-screen').classList.contains('hidden')) closeNick();
+  if (e.target.tagName === 'INPUT') return;
+  keys[e.code] = true;
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+/* ---------- Tir ---------- */
+const raycaster = new THREE.Raycaster();
+let lastShot = 0;
+function shoot() {
+  const now = performance.now();
+  if (!match || now < match.startAt || now >= match.endAt || now < lastShot + 180) return;
+  lastShot = now;
+
+  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  const dir = raycaster.ray.direction.clone();
+  let hitPoint = null;
+  if (targetObj && targetObj.scale.x > 0.6) {
+    const hits = raycaster.intersectObject(targetObj, true);
+    if (hits.length) hitPoint = hits[0].point;
+  }
+  const muzzle = camera.position.clone().add(new THREE.Vector3(0.25, -0.22, -0.6).applyQuaternion(camera.quaternion));
+  tracer(muzzle, hitPoint ?? camera.position.clone().addScaledVector(dir, 60), 0xffcf33);
+  socket.emit('fire', { dir: [dir.x, dir.y, dir.z] });
+  me.pitch = clamp(me.pitch + 0.012, -1.4, 1.4); // léger recul
+
+  if (hitPoint) socket.emit('hit', { targetId: targetObj.userData.id });
+}
+
+/* =====================================================================
+   Boucle de rendu
+   ===================================================================== */
+const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const angleDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+
+function updateMatch(now, dt) {
+  // Déplacement
+  const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  const s = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  if (f || s) {
+    const sp = 5 * dt;
+    me.x += (Math.sin(me.yaw) * -f + Math.cos(me.yaw) * s) * sp;
+    me.z += (Math.cos(me.yaw) * -f - Math.sin(me.yaw) * s) * sp;
+    me.x = clamp(me.x, -9, 9);
+    me.z = clamp(me.z, 5.2, 10);
+  }
+  camera.position.set(me.x, 1.7, me.z);
+  camera.rotation.set(me.pitch, me.yaw, 0);
+  camera.updateMatrixWorld();
+
+  // Envoi de ma position (~20 fois / s)
+  if (now - match.lastSend > 50) {
+    match.lastSend = now;
+    socket.volatile.emit('move', { x: me.x, z: me.z, yaw: me.yaw, pitch: me.pitch });
+  }
+
+  // Adversaire (interpolation)
+  avatar.position.x += (oppTarget.x - avatar.position.x) * 0.25;
+  avatar.position.z += (oppTarget.z - avatar.position.z) * 0.25;
+  avatar.rotation.y += angleDiff(avatar.rotation.y, oppTarget.yaw) * 0.3;
+  upper.rotation.x += (oppTarget.pitch - upper.rotation.x) * 0.3;
+
+  // Marqueur si l'adversaire est hors de l'écran
+  const head = avatar.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+  const local = camera.worldToLocal(head.clone());
+  const p = head.clone().project(camera);
+  const visible = local.z < 0 && Math.abs(p.x) < 0.93 && Math.abs(p.y) < 0.93;
+  const marker = $('opp-marker');
+  marker.classList.toggle('hidden', visible);
+  if (!visible) {
+    const left = local.x < 0;
+    marker.className = left ? 'left' : 'right';
+    marker.textContent = left ? `◀ ${oppNick}` : `${oppNick} ▶`;
+  }
+
+  // Cible : apparition une fois le compte à rebours terminé
+  if (!match.revealed && now >= match.startAt) { match.revealed = true; spawnTarget(match.pendingTarget); }
+
+  // Compte à rebours / chrono
+  const cd = $('countdown');
+  if (now < match.startAt) {
+    cd.textContent = Math.ceil((match.startAt - now) / 1000);
+    cd.classList.remove('hidden');
+  } else if (now - match.startAt < 700) {
+    cd.textContent = 'Go !';
+  } else cd.classList.add('hidden');
+  const remaining = clamp(Math.ceil((match.endAt - Math.max(now, match.startAt)) / 1000), 0, 60);
+  const timer = $('timer');
+  timer.textContent = remaining;
+  timer.classList.toggle('low', remaining <= 10 && now >= match.startAt);
+}
+
+function updateMenuCam(now) {
+  const t = now / 1000;
+  camera.position.set(Math.sin(t * 0.15) * 3.5, 2.4, 9);
+  camera.lookAt(Math.sin(t * 0.15) * -2, 2.6, -18);
+  decor.children.forEach((g) => { g.position.y = g.userData.base + Math.sin(t * 1.2 + g.userData.ph) * 0.18; });
+}
+
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  now = performance.now();
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (state === 'match' && match) updateMatch(now, dt);
+  else updateMenuCam(now);
+
+  if (targetObj) {
+    const t = clamp((now - targetObj.userData.spawnAt) / 260, 0, 1);
+    targetObj.scale.setScalar(Math.max(0.01, easeOutBack(t)));
+  }
+  updateEffects(dt);
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+
+/* =====================================================================
+   Connexion
+   ===================================================================== */
+socket.on('connect', () => {
+  if (!myNick) return;
+  // Reconnexion : le serveur a libéré l'ancien pseudo, on tente de le reprendre
+  socket.emit('set-nick', myNick, (res) => {
+    if (res?.ok) return toast('Connexion rétablie.');
+    myNick = null;
+    setState('nick');
+    openNick('first', 'Connexion rétablie, mais votre pseudo n’est plus disponible. Choisissez-en un autre.');
+  });
+});
+socket.on('disconnect', () => {
+  toast('Connexion au serveur perdue…', 'error');
+  match = null;
+  outgoingInvite = false;
+  $('invite-btn').disabled = false;
+  hideInvitePopup();
+  if (state === 'match') setState('menu');
+});
+
+setState('nick');
+openNick('first');
+</script>
+</body>
+  </html>
